@@ -2,92 +2,110 @@ import streamlit as st
 import requests
 import unicodedata
 
-# Configuración de apariencia profesional
-st.set_page_config(page_title="Nelson Seguridad Pro", page_icon="🛡️", layout="wide")
+# 1. CONFIGURACIÓN DE PÁGINA Y ESTILO DARK PRO
+st.set_page_config(page_title="Vigilancia Pública 24/7", layout="wide")
 
+st.markdown("""
+    <style>
+    .main { background-color: #0e1117; }
+    .stMetric { background-color: #1a1c24; padding: 10px; border-radius: 10px; }
+    .card {
+        background-color: #1e2130;
+        border: 1px solid #3e445e;
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        color: white;
+    }
+    .trato-directo {
+        border: 2px solid #ff4b4b !important;
+        background-color: #2b1b1b !important;
+    }
+    .badge-pago {
+        background-color: #28a745;
+        color: white;
+        padding: 4px 8px;
+        border-radius: 5px;
+        font-size: 12px;
+        float: right;
+    }
+    .badge-urgencia {
+        color: #ff4b4b;
+        font-weight: bold;
+        font-size: 18px;
+        margin-bottom: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# 2. VARIABLES Y FILTROS
 TICKET = "081040C1-4072-483E-9054-12D7D69DA9EE"
 URL_API = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
-
-# Listado maestro de filtros sugeridos por tus documentos
-FILTROS_SEGURIDAD = [
-    "televigilancia", "camaras", "cámara", "lectoras de patente", "lpr", "ptz",
-    "monitoreo", "software seguridad", "cctv", "central de mando", "vigilancia municipal"
-]
+FILTROS = ["televigilancia", "camaras", "lpr", "ptz", "software", "municipal", "cctv"]
 
 def limpiar(t):
     return "".join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').lower() if t else ""
 
-def detectar_caracteristicas(texto):
-    """Detecta tecnicismos presentes en la descripción."""
-    caracteristicas = []
-    if "ptz" in texto: caracteristicas.append("📹 Domos PTZ")
-    if "lpr" in texto or "patente" in texto: caracteristicas.append("🚗 Lectura Patentes (LPR)")
-    if "poste" in texto: caracteristicas.append("🏗️ Instalación de Postes")
-    if "sala" in texto or "espejo" in texto: caracteristicas.append("🖥️ Sala de Monitoreo")
-    if "fibra" in texto: caracteristicas.append("🌐 Conectividad Fibra")
-    return caracteristicas
+# 3. INTERFAZ SUPERIOR
+st.title("🛡️ Vigilancia Pública 24/7")
+col_sw1, col_sw2 = st.columns([1, 1])
+with col_sw1:
+    priorizar_mun = st.toggle("Priorizar Municipalidades y GORE", value=True)
+with col_sw2:
+    solo_urgencia = st.toggle("Solo Trato Directo / Emergencia", value=False)
 
-st.title("🛡️ Monitor Inteligente de Seguridad Pública")
-st.markdown("### Enfoque: Municipalidades, GORE y Gobierno Central")
-
-# Barra lateral para personalizar la búsqueda
-with st.sidebar:
-    st.header("Configuración")
-    dias_vencimiento = st.slider("Días restantes de cierre (aprox)", 1, 30, 15)
-    solo_municipios = st.checkbox("Priorizar Municipalidades", value=True)
-
-if st.button('🔍 Escanear Mercado Público'):
+# 4. LÓGICA DE BÚSQUEDA
+if st.button('🔍 ACTUALIZAR PANEL DE CONTROL'):
     try:
-        with st.spinner('Analizando licitaciones activas de seguridad...'):
-            res = requests.get(URL_API, params={"estado": "activas", "ticket": TICKET})
-            licitaciones = res.json().get("Listado", [])
+        res = requests.get(URL_API, params={"estado": "activas", "ticket": TICKET})
+        licitaciones = res.json().get("Listado", [])
+        filtros_limpios = [limpiar(f) for f in FILTROS]
+        
+        # Grid de 2 columnas para las tarjetas
+        cols = st.columns(2)
+        idx = 0
+
+        for l in licitaciones:
+            nombre = l.get("Nombre", "")
+            desc = l.get("Descripcion", "")
+            org = l.get("NombreOrganismo", "")
+            tipo_oc = str(l.get("CodigoEstado", "")) # Usado para detectar urgencia
             
-            filtros_limpios = [limpiar(f) for f in FILTROS_SEGURIDAD]
-            encontradas = 0
+            texto_total = limpiar(nombre + " " + desc)
+            match_seguridad = any(f in texto_total for f in filtros_limpios)
+            es_urgente = any(x in texto_total for x in ["emergencia", "imprevisto", "urgencia", "directo"])
 
-            for l in licitaciones:
-                nombre_orig = l.get("Nombre", "")
-                desc_orig = l.get("Descripcion", "")
-                org_orig = l.get("NombreOrganismo", "")
+            if match_seguridad:
+                if solo_urgencia and not es_urgente: continue
                 
-                texto_total = limpiar(nombre_orig + " " + desc_orig)
-                org_limpio = limpiar(org_orig)
+                # Definir clase de estilo
+                clase_tarjeta = "card trato-directo" if es_urgente else "card"
                 
-                # Filtro: Debe coincidir con seguridad y (si se activa) ser municipal/gobierno
-                match_seguridad = any(f in texto_total for f in filtros_limpios)
-                es_gobierno = any(g in org_limpio for g in ["municipal", "gore", "intendencia", "subsecretaria", "carabineros"])
-                
-                if match_seguridad:
-                    if solo_municipios and not es_gobierno:
-                        continue
-                        
-                    encontradas += 1
-                    caracts = detectar_caracteristicas(texto_total)
-                    
-                    # Interfaz de tarjeta profesional
-                    with st.container():
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.subheader(f"📦 {nombre_orig}")
-                            st.write(f"🏢 **Organismo:** {org_orig}")
-                            st.write(f"📝 **Descripción:** {desc_orig[:250]}...")
-                        
-                        with col2:
-                            st.info(f"🆔 ID: {l.get('CodigoExterno')}")
-                            st.warning(f"⌛ Cierre: {l.get('FechaCierre')}")
-                            st.link_button("🌐 Abrir Ficha y Anexos", f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion={l.get('CodigoExterno')}")
-                        
-                        # Mostrar características técnicas detectadas
-                        if caracts:
-                            st.markdown(" **Requerimientos Técnicos Detectados:**")
-                            st.write(" | ".join(caracts))
-                        
-                        st.divider()
-
-            if encontradas == 0:
-                st.info("No se hallaron procesos de seguridad municipal activos hoy.")
-            else:
-                st.success(f"Análisis completo: {encontradas} licitaciones de seguridad detectadas.")
+                with cols[idx % 2]:
+                    html_card = f"""
+                    <div class="{clase_tarjeta}">
+                        <span class="badge-pago">PAGO: 30 DÍAS</span>
+                        <div style="color: #fffd8d; font-size: 14px;">ID: {l.get('CodigoExterno')}</div>
+                        <h3 style="margin: 10px 0;">{nombre[:60]}...</h3>
+                        {f'<div class="badge-urgencia">🔥 ¡URGENCIA DETECTADA! POSTULA YA</div>' if es_urgente else ''}
+                        <p style="font-size: 14px; color: #b0b0b0;">🏢 {org}</p>
+                        <div style="display: flex; gap: 10px; margin-top: 10px;">
+                            <span>📹 CCTV</span> | <span>🌐 FIBRA</span> | <span>🚗 LPR</span>
+                        </div>
+                        <br>
+                        <a href="https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion={l.get('CodigoExterno')}" 
+                           target="_blank" style="text-decoration: none;">
+                            <button style="background-color: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; width: 100%;">
+                                Abrir Ficha y Anexos
+                            </button>
+                        </a>
+                    </div>
+                    """
+                    st.markdown(html_card, unsafe_allow_html=True)
+                    idx += 1
 
     except Exception as e:
-        st.error(f"Error en la conexión con la API: {e}")
+        st.error(f"Error de conexión: {e}")
+
+st.sidebar.markdown("---")
+st.sidebar.write(" Última Actualización: " + st.session_state.get('last_run', 'Recién iniciado'))
