@@ -1,94 +1,87 @@
 import streamlit as st
 import requests
-import unicodedata
+import google.generativeai as genai
+from datetime import datetime
 
-# Configuración de apariencia profesional
-st.set_page_config(page_title="Nelson Seguridad Pro", page_icon="🛡️", layout="wide")
+# 1. CONFIGURACIÓN DE IA
+API_KEY = "AIzaSyCAGJkIZRX88u3MrU4q0TTphwdobFvIi3A"
+genai.configure(api_key=API_KEY)
+model = genai.GenerativeModel('gemini-pro')
 
-TICKET = "081040C1-4072-483E-9054-12D7D69DA9EE"
-URL_API = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
-
-# Listado maestro de filtros sugeridos por tus documentos
-FILTROS_SEGURIDAD = [
-    "televigilancia", "camaras", "cámara", "lectoras de patente", "lpr", "ptz",
-    "monitoreo", "software seguridad", "cctv", "central de mando", "vigilancia municipal", "termica", "gore"
-]
-
-def limpiar(t):
-    return "".join(c for c in unicodedata.normalize('NFD', t) if unicodedata.category(c) != 'Mn').lower() if t else ""
-
-def detectar_caracteristicas(texto):
-    """Detecta tecnicismos presentes en la descripción."""
-    caracteristicas = []
-    if "ptz" in texto: caracteristicas.append("📹 Domos PTZ")
-    if "inalambrica" in texto: caracteristicas.append("🌐 Inalambrica")
-    if "lpr" in texto or "patente" in texto: caracteristicas.append("🚗 Lectura Patentes (LPR)")
-    if "poste" in texto: caracteristicas.append("🏗️ Instalación de Postes")
-    if "sala" in texto or "espejo" in texto: caracteristicas.append("🖥️ Sala de Monitoreo")
-    if "fibra" in texto: caracteristicas.append("🌐 Conectividad Fibra")
-    return caracteristicas
-
-st.title("🛡️ Análisis RTD ")
-st.markdown("### Enfoque: Seguridad Electronica")
-
-# Barra lateral para personalizar la búsqueda
-with st.sidebar:
-    st.header("Configuración")
-    dias_vencimiento = st.slider("Días restantes de cierre (aprox)", 1, 30, 15)
-    solo_municipios = st.checkbox("Priorizar Municipalidades", value=True)
-
-if st.button('🔍 Escanear Mercado Público'):
+def obtener_analisis_ia(titulo, descripcion):
+    prompt = f"""
+    Eres experto en seguridad electrónica (RTD). Analiza esta licitación:
+    TÍTULO: {titulo}
+    DESCRIPCIÓN: {descripcion}
+    Responde en máximo 2 frases: ¿Qué tecnología clave piden y por qué es una buena oportunidad?
+    """
     try:
-        with st.spinner('Analizando licitaciones activas de seguridad...'):
-            res = requests.get(URL_API, params={"estado": "activas", "ticket": TICKET})
-            licitaciones = res.json().get("Listado", [])
+        response = model.generate_content(prompt)
+        return response.text
+    except:
+        return "⚠️ Análisis temporalmente no disponible."
+
+# 2. CONFIGURACIÓN DE LA APP (Sin Sidebar)
+st.set_page_config(page_title="Monitor RTD Inteligente", layout="wide")
+
+# Título Principal
+st.title("🛡️ Monitor de Licitaciones RTD + IA")
+st.markdown("### Hola equipo licitaciones publicas RTD")
+st.divider()
+
+# --- OBTENCIÓN DE DATOS ---
+TICKET = "081040C1-4072-483E-9054-12D7D69DA9EE"
+URL_API = f"https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json?estado=activas&ticket={TICKET}"
+
+try:
+    res = requests.get(URL_API)
+    datos = res.json().get("Listado", [])
+    
+    # Filtros optimizados para tu rubro
+    FILTROS = ["camaras", "televigilancia", "lpr", "ptz", "seguridad", "cctv", "monitoreo", "vigilancia"]
+    
+    # Contador para el resumen
+    encontradas = 0
+    
+    # Primero recorremos para contar y luego mostrar
+    for l in datos:
+        nombre = l.get('Nombre', '')
+        desc = l.get('Descripcion', '')
+        if any(f in (nombre + desc).lower() for f in FILTROS):
+            encontradas += 1
+            id_lic = l.get('CodigoExterno')
             
-            filtros_limpios = [limpiar(f) for f in FILTROS_SEGURIDAD]
-            encontradas = 0
-
-            for l in licitaciones:
-                nombre_orig = l.get("Nombre", "")
-                desc_orig = l.get("Descripcion", "")
-                org_orig = l.get("NombreOrganismo", "")
+            # Formato de tarjeta limpia
+            with st.expander(f"📦 {nombre}"):
+                col1, col2 = st.columns([2, 1])
                 
-                texto_total = limpiar(nombre_orig + " " + desc_orig)
-                org_limpio = limpiar(org_orig)
+                with col1:
+                    st.write(f"🏢 **Organismo:** {l.get('NombreOrganismo')}")
+                    st.write(f"📝 **Descripción:** {desc}")
                 
-                # Filtro: Debe coincidir con seguridad y (si se activa) ser municipal/gobierno
-                match_seguridad = any(f in texto_total for f in filtros_limpios)
-                es_gobierno = any(g in org_limpio for g in ["municipal", "gore", "intendencia", "subsecretaria", "carabineros"])
+                with col2:
+                    st.link_button("🌐 Ver en Mercado Público", 
+                                   f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion={id_lic}",
+                                   use_container_width=True)
                 
-                if match_seguridad:
-                    if solo_municipios and not es_gobierno:
-                        continue
-                        
-                    encontradas += 1
-                    caracts = detectar_caracteristicas(texto_total)
-                    
-                    # Interfaz de tarjeta profesional
-                    with st.container():
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.subheader(f"📦 {nombre_orig}")
-                            st.write(f"🏢 **Organismo:** {org_orig}")
-                            st.write(f"📝 **Descripción:** {desc_orig[:250]}...")
-                        
-                        with col2:
-                            st.info(f"🆔 ID: {l.get('CodigoExterno')}")
-                            st.warning(f"⌛ Cierre: {l.get('FechaCierre')}")
-                            st.link_button("🌐 Abrir Ficha y Anexos", f"https://www.mercadopublico.cl/Procurement/Modules/RFB/DetailsAcquisition.aspx?idLicitacion={l.get('CodigoExterno')}")
-                        
-                        # Mostrar características técnicas detectadas
-                        if caracts:
-                            st.markdown(" **Requerimientos Técnicos Detectados:**")
-                            st.write(" | ".join(caracts))
-                        
-                        st.divider()
+                st.divider()
+                st.markdown("#### 🤖 Sugerencia Estratégica IA")
+                
+                # Memoria para que el análisis persista
+                key_ia = f"analisis_{id_lic}"
+                if key_ia not in st.session_state:
+                    st.session_state[key_ia] = None
 
-            if encontradas == 0:
-                st.info("No se hallaron procesos de seguridad municipal activos hoy.")
-            else:
-                st.success(f"Análisis completo: {encontradas} licitaciones de seguridad detectadas.")
+                if st.button("Analizar con Gemini", key=f"btn_{id_lic}"):
+                    with st.spinner("Leyendo bases técnicas..."):
+                        resultado = obtener_analisis_ia(nombre, desc)
+                        st.session_state[key_ia] = resultado
+                
+                if st.session_state[key_ia]:
+                    st.info(st.session_state[key_ia])
 
-    except Exception as e:
-        st.error(f"Error en la conexión con la API: {e}")
+    if encontradas == 0:
+        st.warning("No se encontraron licitaciones con los filtros de seguridad en este momento.")
+
+except Exception as e:
+    st.error(f"Error de conexión: {e}")
