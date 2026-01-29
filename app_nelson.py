@@ -132,3 +132,22 @@ if st.button('🔍 Escanear Mercado Público'):
 
     except Exception as e:
         st.error(f"Error: {e}")
+        import streamlit as st
+import requests
+import unicodedata
+
+# 1. FORZAR DISEÑO DE TABLERO PROFESIONAL (CSS)
+st.set_page_config(page_title="Nelson Seguridad RTD", page_icon="🛡️", layout="wide")
+
+st.markdown("""
+    <style>
+    /* Fondo general y fuentes */
+    .stApp { background-color: #0b0e14; color: #ffffff; }
+    
+    /* Estilo de la Tarjeta */
+    .licitacion-card {
+        background: linear-gradient(145deg, #161b22, #1f262e);
+        border: 1px solid #30363d;
+        border-radius: 12px;
+        padding:
+
