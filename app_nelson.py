@@ -10,7 +10,7 @@ URL_API = "https://api.mercadopublico.cl/servicios/v1/publico/licitaciones.json"
 
 # Listado maestro de filtros sugeridos por tus documentos
 FILTROS_SEGURIDAD = [
-    "televigilancia", "camaras", "cámara", "lectoras de patente", "lpr", "ptz",
+    "televigilancia", "camaras", "cámara", "lectoras de patente", "lpr", "ptz", "alarmas", 
     "monitoreo", "software seguridad", "cctv", "central de mando", "vigilancia municipal", "termica", "gore"
 ]
 
@@ -91,4 +91,5 @@ if st.button('🔍 Escanear Mercado Público'):
                 st.success(f"Análisis completo: {encontradas} licitaciones de seguridad detectadas.")
 
     except Exception as e:
+
         st.error(f"Error en la conexión con la API: {e}")
